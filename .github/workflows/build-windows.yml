@@ -1,0 +1,62 @@
+name: Build Windows EXE
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Godot 4.7.2
+        run: |
+          curl -L --fail --retry 3 -o godot.zip https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip -d godot
+          mv godot/Godot_v4.7.2-stable_linux.x86_64 godot/godot
+          chmod +x godot/godot
+
+      - name: Download export templates
+        run: |
+          curl -L --fail --retry 3 -o templates.tpz https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/4.7.2.stable
+          unzip -q templates.tpz -d /tmp/godot_templates
+          cp -R /tmp/godot_templates/templates/* ~/.local/share/godot/export_templates/4.7.2.stable/
+
+      - name: Check project
+        run: |
+          ./godot/godot --headless --path . --editor --quit
+
+      - name: Build Windows executable
+        run: |
+          mkdir -p dist
+          ./godot/godot --headless --path . --export-release "Windows Desktop" dist/NaijaStreetRush.exe
+
+      - name: Package game
+        run: |
+          cd dist
+          zip -9 NaijaStreetRush-Windows.zip NaijaStreetRush.exe
+
+      - name: Upload downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NaijaStreetRush-Windows
+          path: dist/NaijaStreetRush-Windows.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/heads/main')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0
+          name: Naija Street Rush v0.1.0
+          body: |
+            First playable Windows build of Naija Street Rush.
+            Controls: A/D or Arrow Keys to steer, SPACE for turbo, ENTER to start/replay.
+          files: dist/NaijaStreetRush-Windows.zip
+          make_latest: true
